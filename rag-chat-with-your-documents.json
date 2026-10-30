@@ -1,0 +1,364 @@
+{
+  "name": "RAG: Chat with Your Documents",
+  "nodes": [
+    {
+      "id": "7493df47-363a-44c0-87e8-132273cdfb3b",
+      "name": "Upload PDF",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        208
+      ],
+      "parameters": {
+        "formTitle": "Upload a document",
+        "formDescription": "Upload a PDF to add it to the knowledge base. You can then ask questions about it in the chat.",
+        "formFields": {
+          "values": [
+            {
+              "fieldType": "file",
+              "fieldLabel": "PDF document",
+              "fieldName": "pdf_file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".pdf",
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "onReceived",
+        "options": {
+          "path": "rag-upload",
+          "buttonLabel": "Ingest document",
+          "respondWithOptions": {
+            "values": {
+              "respondWith": "text",
+              "formSubmittedText": "Document ingested. You can now ask questions about it in the chat."
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "054f0034-3487-4cef-84c7-52be6abffaac",
+      "name": "Store Chunks in Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.4,
+      "position": [
+        320,
+        0
+      ],
+      "parameters": {
+        "mode": "insert",
+        "memoryKey": {
+          "__rl": true,
+          "mode": "id",
+          "value": "rag_documents"
+        },
+        "clearStore": false
+      }
+    },
+    {
+      "id": "d7d133ef-d544-4008-b84f-dc25c75c59c7",
+      "name": "Embeddings OpenAI",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        224
+      ],
+      "parameters": {
+        "model": "text-embedding-3-small",
+        "options": {}
+      }
+    },
+    {
+      "id": "be17448d-3cf5-47f4-95b3-d84f2a1c70b0",
+      "name": "PDF Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        416,
+        224
+      ],
+      "parameters": {
+        "dataType": "binary",
+        "binaryMode": "specificField",
+        "binaryDataKey": "pdf_file",
+        "loader": "pdfLoader",
+        "textSplittingMode": "custom",
+        "options": {
+          "splitPages": true,
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "document_name",
+                "value": "={{ $(\"Upload PDF\").item.binary.pdf_file.fileName }}"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "83285d96-f955-40ee-9cc1-81dde38707c2",
+      "name": "Split into Chunks",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        496,
+        432
+      ],
+      "parameters": {
+        "chunkSize": 1000,
+        "chunkOverlap": 200,
+        "options": {}
+      }
+    },
+    {
+      "id": "105eeb55-ba7e-46fb-a1f6-c0d365281d64",
+      "name": "Chat with Documents",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        720
+      ],
+      "parameters": {
+        "public": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "e6ade1cf-f4f7-449b-8fa9-2bb9ff6d2759",
+      "name": "RAG Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        288,
+        720
+      ],
+      "parameters": {
+        "promptType": "auto",
+        "options": {
+          "systemMessage": "You are a document assistant. You answer questions strictly using the documents the user has uploaded.\n\nRules:\n1. For every question, first call the search_documents tool to retrieve relevant passages.\n2. Answer ONLY with information found in the retrieved passages. Never use outside knowledge or guess.\n3. Cite your sources: end every answer with a \"Sources\" line listing the document_name (and page number if available in the metadata) of each passage you used.\n4. If the retrieved passages do not contain the answer, or nothing relevant is returned, reply exactly: \"I don't know. I couldn't find that in the uploaded documents.\" Do not add a Sources line in that case.\n5. Keep answers concise and clear."
+        }
+      }
+    },
+    {
+      "id": "d44e3b01-00e4-4e7d-b030-caed8a04d9a2",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        944
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-6.1-terra"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "8e72ba86-133d-44fa-b584-62399c21d6ed",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        352,
+        944
+      ],
+      "parameters": {
+        "contextWindowLength": 10
+      }
+    },
+    {
+      "id": "1ab02eab-1bef-4208-a026-3d438d9cb7df",
+      "name": "search_documents",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.4,
+      "position": [
+        480,
+        944
+      ],
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search the uploaded documents for passages relevant to the user question. Returns text chunks with metadata including document_name. Always call this before answering.",
+        "memoryKey": {
+          "__rl": true,
+          "mode": "id",
+          "value": "rag_documents"
+        },
+        "topK": 5,
+        "includeDocumentMetadata": true
+      }
+    },
+    {
+      "id": "c28415de-d2db-4142-b4b3-c11e2d1c8d68",
+      "name": "Note: Ingestion",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        -96
+      ],
+      "parameters": {
+        "content": "## Part 1: Ingestion\nOpen the form, upload a PDF and submit.\n\n1. **Upload PDF** (Form Trigger) receives the file as binary data.\n2. **PDF Loader** extracts the text and tags each chunk with its `document_name` so answers can cite the source.\n3. **Split into Chunks** cuts the text into ~1000 character pieces with 200 overlap so context isn't lost at boundaries.\n4. **Store Chunks in Vector Store** embeds each chunk and saves it in the built-in Simple Vector Store under the key `rag_documents`.\n\nNote: the Simple Vector Store lives in n8n memory, so it is cleared on restart. Fine for demos; use Pinecone/Qdrant/Supabase for production.",
+        "color": 4,
+        "width": 720,
+        "height": 640
+      }
+    },
+    {
+      "id": "aebaaffc-de1a-4f8e-8636-1a8e05aaab86",
+      "name": "Note: Chat",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        624
+      ],
+      "parameters": {
+        "content": "## Part 2: Chat\nOpen the chat and ask questions about your uploaded documents.\n\n1. **Chat with Documents** (Chat Trigger) receives each message.\n2. **RAG Agent** is told to answer ONLY from retrieved passages, cite the document name, and say \"I don't know\" when nothing relevant is found.\n3. **search_documents** is the vector store exposed as a retrieval tool. The agent calls it to fetch the top 5 matching chunks.\n4. **Conversation Memory** keeps the last 10 messages for follow-up questions.",
+        "color": 5,
+        "width": 784,
+        "height": 432
+      }
+    },
+    {
+      "id": "dee9ea09-6c30-49aa-b065-b7532b9bd126",
+      "name": "Note: Embeddings",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        256,
+        128
+      ],
+      "parameters": {
+        "content": "## Embeddings\nIngestion and retrieval share the same embeddings model and the same memory key (`rag_documents`). They must match exactly, otherwise similarity search returns nothing useful.",
+        "color": 3,
+        "width": 144,
+        "height": 208
+      }
+    },
+    {
+      "id": "d091c7e3-05fa-4ac4-b421-aa7c889787e2",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        144,
+        1152
+      ],
+      "parameters": {
+        "content": "# RAG: Chat with your documents\nA portfolio project showing Retrieval-Augmented Generation in n8n.\n\n**How to use**\n1. Run the **Upload PDF** form and submit one or more PDFs.\n2. Open the chat and ask a question.\n\nAnswers come only from your documents, with citations. Unknown answers return \"I don't know\".\n\n**Setup:** connect an OpenAI credential on the chat model and embeddings nodes.",
+        "color": 6,
+        "width": 420,
+        "height": 340
+      }
+    }
+  ],
+  "connections": {
+    "Upload PDF": {
+      "main": [
+        [
+          {
+            "node": "Store Chunks in Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Store Chunks in Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "search_documents",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Store Chunks in Vector Store",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split into Chunks": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "PDF Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat with Documents": {
+      "main": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_documents": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

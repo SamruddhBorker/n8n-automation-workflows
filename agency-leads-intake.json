@@ -1,0 +1,220 @@
+{
+  "name": "Agency Leads Intake",
+  "nodes": [
+    {
+      "id": "82cf4f73-90dd-404b-a699-6153a99819a6",
+      "name": "Lead Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "formTitle": "Get in Touch",
+        "formDescription": "Tell us about your project and we will get back to you shortly.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Name",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Business Name",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Phone",
+              "fieldType": "text"
+            },
+            {
+              "fieldLabel": "Service Needed",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Web Design"
+                  },
+                  {
+                    "option": "AI Automation"
+                  },
+                  {
+                    "option": "Both"
+                  },
+                  {
+                    "option": "Other"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Message",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {
+          "path": "agency-leads"
+        }
+      }
+    },
+    {
+      "id": "72594ab6-a6fe-42e6-86a0-259f4c89b257",
+      "name": "Append Lead to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Agency Leads"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now.toFormat(\"yyyy-MM-dd HH:mm:ss\") }}",
+            "Name": "={{ $json.Name }}",
+            "Business Name": "={{ $json[\"Business Name\"] }}",
+            "Email": "={{ $json.Email }}",
+            "Phone": "={{ $json.Phone }}",
+            "Service Needed": "={{ $json[\"Service Needed\"] }}",
+            "Message": "={{ $json.Message }}"
+          },
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Business Name",
+              "displayName": "Business Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Service Needed",
+              "displayName": "Service Needed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Message",
+              "displayName": "Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d2a51503-abf9-4544-9311-e92c41fbb842",
+      "name": "Email Lead Notification",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "YOUR_YOUR_EMAIL_ADDRESS",
+        "subject": "=New lead: {{ $(\"Lead Form\").item.json[\"Business Name\"] }} - {{ $(\"Lead Form\").item.json[\"Service Needed\"] }}",
+        "emailType": "html",
+        "message": "=<h3>New lead received</h3><p><b>Name:</b> {{ $(\"Lead Form\").item.json.Name }}<br><b>Business:</b> {{ $(\"Lead Form\").item.json[\"Business Name\"] }}<br><b>Email:</b> {{ $(\"Lead Form\").item.json.Email }}<br><b>Phone:</b> {{ $(\"Lead Form\").item.json.Phone }}<br><b>Service needed:</b> {{ $(\"Lead Form\").item.json[\"Service Needed\"] }}<br><b>Message:</b> {{ $(\"Lead Form\").item.json.Message }}</p><p>Received: {{ $(\"Append Lead to Sheet\").item.json.Timestamp ?? $now.toFormat(\"yyyy-MM-dd HH:mm:ss\") }}</p>"
+      }
+    }
+  ],
+  "connections": {
+    "Lead Form": {
+      "main": [
+        [
+          {
+            "node": "Append Lead to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Lead to Sheet": {
+      "main": [
+        [
+          {
+            "node": "Email Lead Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

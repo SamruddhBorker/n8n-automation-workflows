@@ -1,0 +1,240 @@
+{
+  "name": "Pinterest Auto Poster",
+  "nodes": [
+    {
+      "id": "d9fcf17e-2960-4631-a325-b31c2e1501e9",
+      "name": "Schedule 3x Daily (US)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9,13,20 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "8318e197-f455-4a0b-8ea6-454041116949",
+      "name": "Read Pin Queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "authentication": "oAuth2",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Pin Queue"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Pin Queue tab"
+        }
+      }
+    },
+    {
+      "id": "12526884-0cd7-4608-9fe5-b4e84a9cf273",
+      "name": "Only Unposted Rows",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "status-empty",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "ab10f71e-31aa-43a3-aa04-21861dd3410a",
+      "name": "Next Pin",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "maxItems": 1,
+        "keep": "firstItems"
+      }
+    },
+    {
+      "id": "8a180ec5-a2a8-4f3e-8f5b-5a560a5b7ad6",
+      "name": "Create Pinterest Pin",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pinterest.com/v5/pins",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpTemplatedCustomAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ board_id: String($json.board_id), title: String($json.title).slice(0, 100), description: String($json.description).slice(0, 800), link: $json.product_link, media_source: { source_type: \"image_url\", url: $json.image_url } }) }}"
+      }
+    },
+    {
+      "id": "6ab18801-ad96-4aad-aee0-bd90ed524655",
+      "name": "Mark Row Posted",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "authentication": "oAuth2",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Pin Queue"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the Pin Queue tab"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $(\"Next Pin\").item.json.row_number }}",
+            "status": "={{ \"posted \" + $now.toFormat(\"yyyy-MM-dd\") }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule 3x Daily (US)": {
+      "main": [
+        [
+          {
+            "node": "Read Pin Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Pin Queue": {
+      "main": [
+        [
+          {
+            "node": "Only Unposted Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Unposted Rows": {
+      "main": [
+        [
+          {
+            "node": "Next Pin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Next Pin": {
+      "main": [
+        [
+          {
+            "node": "Create Pinterest Pin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Pinterest Pin": {
+      "main": [
+        [
+          {
+            "node": "Mark Row Posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

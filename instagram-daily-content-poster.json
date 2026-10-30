@@ -1,0 +1,355 @@
+{
+  "name": "Instagram Daily Content Poster",
+  "nodes": [
+    {
+      "id": "8b68a9c3-8814-4dbc-b1d8-b30bbacd62d6",
+      "name": "Every Day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 10,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f0934c6f-0781-4e24-8484-e2142d46c8b5",
+      "name": "Read IG Content Ideas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        272,
+        128
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "authentication": "oAuth2",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "IG Content Ideas"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the IG Content Ideas tab"
+        }
+      }
+    },
+    {
+      "id": "fef49c9d-dd73-42ff-b422-6a4593492c40",
+      "name": "Only Unused Topics",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        496,
+        128
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "status-empty",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "5838bef5-b984-4dd5-8d8c-bfa5edf0a4fb",
+      "name": "Next Topic",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        720,
+        128
+      ],
+      "parameters": {
+        "maxItems": 1,
+        "keep": "firstItems"
+      }
+    },
+    {
+      "id": "b688b30f-8759-436c-b4b2-1ea7e658f25d",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        752,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ig-user-id",
+              "name": "ig_user_id",
+              "value": "YOUR_INSTAGRAM_BUSINESS_ACCOUNT_ID",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "3343a2ff-595b-4621-bf32-6428c2a4881b",
+      "name": "Write Caption",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        976,
+        0
+      ],
+      "parameters": {
+        "resource": "text",
+        "operation": "response",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-6.1-terra"
+        },
+        "responses": {
+          "values": [
+            {
+              "type": "text",
+              "role": "system",
+              "content": "You are a social media copywriter for an AI influencer Instagram account that earns through Amazon affiliate links and an online course. Write engaging, authentic captions. Output ONLY the final caption text, no preamble or quotes."
+            },
+            {
+              "type": "text",
+              "role": "user",
+              "content": "=Write an Instagram caption for this post.\nTopic: {{ $json.topic }}\nNiche: {{ $json.niche }}\n\nRequirements:\n1. Start with a scroll-stopping hook (first line).\n2. Short, valuable body (2-4 short lines) related to the topic.\n3. A call-to-action that says \"link in bio\" (do not paste any URL).\n4. End with exactly 15 relevant hashtags on a new line, separated by spaces.\nKeep the total under 2000 characters."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 1500
+        }
+      }
+    },
+    {
+      "id": "be2700d1-3101-4eb5-99ae-d4fd8df04c16",
+      "name": "Create Media Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1376,
+        128
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $(\"Config\").item.json.ig_user_id }}/media",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ image_url: $(\"Next Topic\").item.json.image_url, caption: $json.output[0].content[0].text }) }}"
+      }
+    },
+    {
+      "id": "76cf0e5e-bb18-4e43-991f-493c2335e7d5",
+      "name": "Publish to Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1600,
+        128
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $(\"Config\").item.json.ig_user_id }}/media_publish",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ creation_id: $json.id }) }}"
+      }
+    },
+    {
+      "id": "b0ba5ec3-3a2c-4cdb-bd3c-09856becd0c0",
+      "name": "Mark Row Posted",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1856,
+        0
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "authentication": "oAuth2",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "IG Content Ideas"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Select the IG Content Ideas tab"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $(\"Next Topic\").item.json.row_number }}",
+            "status": "posted"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Day": {
+      "main": [
+        [
+          {
+            "node": "Read IG Content Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read IG Content Ideas": {
+      "main": [
+        [
+          {
+            "node": "Only Unused Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Unused Topics": {
+      "main": [
+        [
+          {
+            "node": "Next Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Next Topic": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Write Caption",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Caption": {
+      "main": [
+        [
+          {
+            "node": "Create Media Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Media Container": {
+      "main": [
+        [
+          {
+            "node": "Publish to Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish to Instagram": {
+      "main": [
+        [
+          {
+            "node": "Mark Row Posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}
